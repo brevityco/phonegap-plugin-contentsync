@@ -97,7 +97,8 @@ The event `progress` will be triggered on each update as the native platform dow
 
 Callback Parameter | Description
 ------------------ | -----------
-`data.progress` | `Integer` Progress percentage between `0 - 100`. The progress includes all actions required to cache the remote content locally. This is different on each platform, but often includes requesting, downloading, and extracting the cached content along with any system cleanup tasks.
+`data.progress` | `Integer` Progress percentage between `0 - 100`. The progress includes all actions required to cache the remote content locally. This is different on each platform, but often includes requesting, downloading, and extracting the cached content along with any system cleanup tasks. Is 0 during downloading if the download size is not provided by the server.
+`data.bytes` | `Integer` number of bytes downloaded during downloading phase.
 `data.status` | `Integer` Enumeration of `PROGRESS_STATE` to describe the current progress state.
 
 #### Example
