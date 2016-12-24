@@ -74,6 +74,7 @@ public class Sync extends CordovaPlugin {
     public static final int UNZIP_ERROR = 3;
 
     private static final String PROP_LOCAL_PATH = "localPath";
+    private static final String PROP_BYTES = "bytes";
     private static final String PROP_STATUS = "status";
     private static final String PROP_PROGRESS = "progress";
     private static final String PROP_LOADED = "loaded";
@@ -999,6 +1000,7 @@ public class Sync extends CordovaPlugin {
             JSONObject jsonProgress = new JSONObject();
             jsonProgress.put(PROP_PROGRESS, this.percentage);
             jsonProgress.put(PROP_STATUS, this.getStatus());
+            jsonProgress.put(PROP_BYTES, this.getLoaded());
             jsonProgress.put(PROP_LOADED, this.getLoaded());
             jsonProgress.put(PROP_TOTAL, this.getTotal());
             return jsonProgress;
@@ -1007,7 +1009,7 @@ public class Sync extends CordovaPlugin {
         private void updatePercentage() {
             double loaded = this.getLoaded();
             double total = this.getTotal();
-            this.percentage = Math.floor((loaded / total * 100) / 2);
+            this.percentage = total > 0 ? Math.floor((loaded / total * 100) / 2) : 0;
             if (this.getStatus() == STATUS_EXTRACTING) {
                 this.percentage += 50;
             }

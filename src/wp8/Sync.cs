@@ -445,14 +445,14 @@ namespace WPCordovaClassLib.Cordova.Commands
             SyncProgress progEvent = new SyncProgress(bytesTotal);
             progEvent.BytesLoaded = bytesLoaded;
 
-            int percent = (int)((bytesLoaded / (double)bytesTotal) * 100);
+            int percent = bytesTotal > 0 ? (int)((bytesLoaded / (double)bytesTotal) * 100) : 0;
 
             // jump from 50 to 100 once unzip is done
             if(bytesLoaded != bytesTotal && status != 3){
                 percent = percent / 2;
             }
 
-            string result = "{\"progress\":" + percent + ", \"status\":" + status + "}";
+            string result = "{\"progress\":" + percent + ", \"status\":" + status + ", \"bytes\":" + bytesLoaded + "}";
 
             PluginResult plugRes = new PluginResult(PluginResult.Status.OK, result);
             plugRes.KeepCallback = keepCallback;

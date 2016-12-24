@@ -1,4 +1,4 @@
-// progress-state 
+// progress-state
 // 0:stopped, 1:downloading,2:extracting,3:complete
 
 // error-state
@@ -197,7 +197,7 @@ var Sync = {
                 }).then(function downloadComplete(dlResult) { // download is done
                     if (dlResult) {
                         //console.log("download is complete " + dlResult);
-                        cbSuccess({ 'progress': 50, 'status': 2 }, { keepCallback: true }); // EXTRACTING
+                        cbSuccess({ 'progress': 50, 'status': 2, bytes: 0 }, { keepCallback: true }); // EXTRACTING
 
                         return ZipWinProj.PGZipInflate.inflateAsync(dlResult.resultFile, destFolder)
                         .then(function (obj) {
@@ -224,16 +224,16 @@ var Sync = {
                     var total = progressEvent.progress.totalBytesToReceive;
                     var bytes = progressEvent.progress.bytesReceived;
                     var progPercent = total ? Math.round(bytes / total * 50) : 0;
-                    cbSuccess({ 'progress': progPercent, 'status': 1 }, { keepCallback: true });    // 0:stopped, 1:downloading, 2:extracting,  3:complete
+                    cbSuccess({ 'progress': progPercent, 'status': 1, 'bytes': bytes }, { keepCallback: true });    // 0:stopped, 1:downloading, 2:extracting,  3:complete
                 })
                 .then(function maybeCopyCordovaAssets(res) {
                     return bCopyCordovaAssets ? copyCordovaAssetsAsync(wwwFolder, destWWWFolder) : null;
                 },
-                function (err) { 
+                function (err) {
                     console.log("got err  : " + err);
                 })
                 .then(function (boom) {
-                    cbSuccess({ 'localPath': destFolder, 'status': 3 }, { keepCallback: false });
+                    cbSuccess({ 'localPath': destFolder, 'status': 3, 'bytes': 0 }, { keepCallback: false });
                 })
 
             }

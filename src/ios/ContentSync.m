@@ -53,12 +53,13 @@
     [NSURLProtocol registerClass:[NSURLProtocolNoCache class]];
 }
 
-- (CDVPluginResult*) preparePluginResult:(NSInteger)progress status:(NSInteger)status {
+- (CDVPluginResult*) preparePluginResult:(NSInteger)progress status:(NSInteger)status bytes:(NSInteger)bytes {
     CDVPluginResult *pluginResult = nil;
 
-    NSMutableDictionary* message = [NSMutableDictionary dictionaryWithCapacity:2];
+    NSMutableDictionary* message = [NSMutableDictionary dictionaryWithCapacity:3];
     [message setObject:[NSNumber numberWithInteger:progress] forKey:@"progress"];
     [message setObject:[NSNumber numberWithInteger:status] forKey:@"status"];
+    [message setObject:[NSNumber numberWithInteger:bytes] forKey:@'bytes'];
     pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:message];
 
     return pluginResult;
@@ -276,7 +277,7 @@
 
             [downloadTask resume];
 
-            pluginResult = [self preparePluginResult:sData.progress status:Downloading];
+            pluginResult = [self preparePluginResult:sData.progress status:Downloading bytes:0];
             [pluginResult setKeepCallbackAsBool:YES];
         }
 
@@ -379,7 +380,7 @@
         //NSLog(@"DownloadTask: %@ progress: %lf callbackId: %@", downloadTask, progress, sTask.command.callbackId);
         progress = (sTask.extractArchive == YES ? ((progress / 2) * 100) : progress * 100);
         sTask.progress = progress;
-        pluginResult = [self preparePluginResult:sTask.progress status:Downloading];
+        pluginResult = [self preparePluginResult:sTask.progress status:Downloading bytes:totalBytesWritten];
         [pluginResult setKeepCallbackAsBool:YES];
         [self.commandDelegate sendPluginResult:pluginResult callbackId:sTask.command.callbackId];
     } else {
@@ -487,7 +488,7 @@
                 NSLog(@"Task: %@ completed successfully", sTask.archivePath);
                 if(sTask.extractArchive) {
                     progress = ((progress / 2) * 100);
-                    pluginResult = [self preparePluginResult:progress status:Downloading];
+                    pluginResult = [self preparePluginResult:progress status:Downloading bytes: 0];
                     [pluginResult setKeepCallbackAsBool:YES];
                 }
                 else {
@@ -569,9 +570,9 @@
     ContentSyncTask* sTask = [self findSyncDataByPath];
     if(sTask) {
         //NSLog(@"Extracting %ld / %ld", (long)loaded, (long)total);
-        double progress = ((double)loaded / (double)total);
+        double progress = total > 0 ? (double)loaded / (double)total : 0;
         progress = (sTask.extractArchive == YES ? ((0.5 + progress / 2) * 100) : progress * 100);
-        CDVPluginResult* pluginResult = [self preparePluginResult:progress status:Extracting];
+        CDVPluginResult* pluginResult = [self preparePluginResult:progress status:Extracting bytes:0];
         [pluginResult setKeepCallbackAsBool:YES];
         [self.commandDelegate sendPluginResult:pluginResult callbackId:sTask.command.callbackId];
     }
@@ -588,7 +589,7 @@
             [self copyCordovaAssets:unzippedPath];
         }
         // XXX this is to match the Android implementation
-        CDVPluginResult* pluginResult = [self preparePluginResult:100 status:Complete];
+        CDVPluginResult* pluginResult = [self preparePluginResult:100 status:Complete bytes:0];
         [pluginResult setKeepCallbackAsBool:YES];
         [self.commandDelegate sendPluginResult:pluginResult callbackId:sTask.command.callbackId];
         // END
