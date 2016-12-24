@@ -59,7 +59,7 @@
     NSMutableDictionary* message = [NSMutableDictionary dictionaryWithCapacity:3];
     [message setObject:[NSNumber numberWithInteger:progress] forKey:@"progress"];
     [message setObject:[NSNumber numberWithInteger:status] forKey:@"status"];
-    [message setObject:[NSNumber numberWithInteger:bytes] forKey:@'bytes'];
+    [message setObject:[NSNumber numberWithInteger:bytes] forKey:@"bytes"];
     pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:message];
 
     return pluginResult;
