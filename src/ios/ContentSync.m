@@ -281,8 +281,8 @@
 #endif
         } else {
             NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:downloadURL];
-            request.timeoutInterval = 15.0;
-            
+            request.timeoutInterval = [timeout doubleValue];
+
             [self setHeaders:request :headers];
 
             NSURLSessionDownloadTask *downloadTask = [self.session downloadTaskWithRequest:request];
