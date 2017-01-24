@@ -55,6 +55,10 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import android.app.Activity;
+import android.content.SharedPreferences;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
 import android.content.res.AssetManager;
 import android.net.Uri;
 import android.os.Environment;
@@ -86,6 +90,7 @@ public class Sync extends CordovaPlugin {
     private static final String TYPE_LOCAL = "local";
 
     private static final String LOG_TAG = "ContentSync";
+    public static final String PREVIOUS_VERSION = "PREVIOUS_VERSION";
 
     private static HashMap<String, ProgressEvent> activeRequests = new HashMap<String, ProgressEvent>();
     private static final int MAX_BUFFER_SIZE = 16 * 1024;
@@ -240,6 +245,7 @@ public class Sync extends CordovaPlugin {
         PluginResult result = null;
         TrackingInputStream inputStream = null;
         boolean cached = false;
+        boolean retval = true;
 
         OutputStream outputStream = null;
         try {
@@ -252,7 +258,6 @@ public class Sync extends CordovaPlugin {
             Log.d(LOG_TAG, "Download file: " + sourceUri);
             Log.d(LOG_TAG, "Target file: " + file);
             Log.d(LOG_TAG, "size = " + file.length());
-
 
             if (isLocalTransfer) {
                 readResult = resourceApi.openForRead(sourceUri);
@@ -297,7 +302,8 @@ public class Sync extends CordovaPlugin {
                     cached = true;
                     connection.disconnect();
                     sendErrorMessage("Resource not modified: " + source, CONNECTION_ERROR, callbackContext, connection.getResponseCode());
-                    return false;
+                    retval = false;
+                    return retval;
                 } else {
                     if (connection.getContentEncoding() == null || connection.getContentEncoding().equalsIgnoreCase("gzip")) {
                         // Only trust content-length header if we understand
@@ -308,7 +314,8 @@ public class Sync extends CordovaPlugin {
                                 cached = true;
                                 connection.disconnect();
                                 sendErrorMessage("Not enough free space to download", CONNECTION_ERROR, callbackContext, connection.getResponseCode());
-                                return false;
+                                retval = false;
+                                return retval;
                             } else {
                                 progress.setTotal(connectionLength);
                             }
@@ -322,7 +329,8 @@ public class Sync extends CordovaPlugin {
                 try {
                     synchronized (progress) {
                         if (progress.isAborted()) {
-                            return false;
+                            retval = false;
+                            return retval;
                         }
                         //progress.connection = connection;
                     }
@@ -334,7 +342,8 @@ public class Sync extends CordovaPlugin {
                     while ((bytesRead = inputStream.read(buffer)) > 0) {
                         synchronized (progress) {
                             if (progress.isAborted()) {
-                                return false;
+                                retval = false;
+                                return retval;
                             }
                         }
                         Log.d(LOG_TAG, "bytes read = " + bytesRead);
@@ -355,6 +364,7 @@ public class Sync extends CordovaPlugin {
 
         } catch (Throwable e) {
             try {
+                retval = false;
                 sendErrorMessage(e.getLocalizedMessage(), CONNECTION_ERROR, callbackContext, connection.getResponseCode());
             } catch (IOException ioe) {
             }
@@ -369,7 +379,7 @@ public class Sync extends CordovaPlugin {
             }
         }
 
-        return true;
+        return retval;
     }
 
     private void sendErrorMessage(String message, int type, CallbackContext callbackContext) {
@@ -452,12 +462,16 @@ public class Sync extends CordovaPlugin {
                 File dir = new File(outputDirectory);
                 Log.d(LOG_TAG, "dir = " + dir.exists());
 
-                if (type.equals(TYPE_LOCAL) && !dir.exists()) {
+                if (type.equals(TYPE_LOCAL) && hasAppBeenUpdated()) {
+                    savePrefs();
+
                     if ("null".equals(src) && (copyRootApp || copyCordovaAssets)) {
                         if (copyRootApp) {
+                            Log.d(LOG_TAG, "doing copy root app");
                             copyRootApp(outputDirectory, manifestFile);
                         }
                         if (copyCordovaAssets) {
+                            Log.d(LOG_TAG, "doing copy cordova app");
                             copyCordovaAssets(outputDirectory);
                         }
 
@@ -547,6 +561,39 @@ public class Sync extends CordovaPlugin {
                 }
             }
         });
+    }
+
+    private void savePrefs() {
+        SharedPreferences.Editor editor = cordova.getActivity().getSharedPreferences(cordova.getActivity().getPackageName(), 0).edit();
+        editor.putInt(PREVIOUS_VERSION, getCurrentAppVersion());
+        editor.commit();
+    }
+
+    private boolean hasAppBeenUpdated() {
+        Activity activity = cordova.getActivity();
+
+        int currentAppVersion = -1;
+
+        SharedPreferences settings = activity.getSharedPreferences(activity.getPackageName(), 0);
+        int previousAppVersion = settings.getInt(PREVIOUS_VERSION, -1);
+
+        currentAppVersion = getCurrentAppVersion();
+
+        Log.d(LOG_TAG, "current = " + currentAppVersion);
+        Log.d(LOG_TAG, "previous = " + previousAppVersion);
+
+        return currentAppVersion > previousAppVersion ? true : false;
+    }
+
+    private int getCurrentAppVersion() {
+        Activity activity = cordova.getActivity();
+        int currentAppVersion = -1;
+        try {
+            currentAppVersion = activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0).versionCode;
+        } catch (PackageManager.NameNotFoundException e) {
+            // ignore
+        }
+        return currentAppVersion;
     }
 
     private boolean isZipFile(File targetFile) {

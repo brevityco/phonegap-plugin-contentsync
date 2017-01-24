@@ -103,6 +103,27 @@
 }
 #endif // TAGET_OS_IOS
 
++ (BOOL) hasAppBeenUpdated {
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    NSString* previousVersion = [defaults objectForKey:@"PREVIOUS_VERSION"];
+
+    NSDictionary *infoDictionary = [[NSBundle mainBundle] infoDictionary];
+    NSString* currentVersion = [infoDictionary objectForKey:@"CFBundleShortVersionString"];
+
+    NSLog(@"previous version %@", previousVersion);
+    NSLog(@"current version %@", currentVersion);
+
+    // set previous version to current version
+    [defaults setObject:currentVersion forKey:@"PREVIOUS_VERSION"];
+    [defaults synchronize];
+
+    if ([currentVersion compare:previousVersion options:NSNumericSearch] == NSOrderedDescending) {
+        NSLog(@"current version is newer than previous version");;
+    }
+
+    return ([currentVersion compare:previousVersion options:NSNumericSearch] == NSOrderedDescending);
+}
+
 - (void)sync:(CDVInvokedUrlCommand*)command {
     NSString* src = [command argumentAtIndex:0 withDefault:nil];
     NSString* type = [command argumentAtIndex:2];
@@ -117,16 +138,18 @@
     if(local == YES) {
         NSLog(@"Requesting local copy of %@", appId);
         if([fileManager fileExistsAtPath:[appPath path]]) {
-            NSLog(@"Found local copy %@", [appPath path]);
-            CDVPluginResult *pluginResult = nil;
+            if (![ContentSync hasAppBeenUpdated]) {
+                NSLog(@"Found local copy %@", [appPath path]);
+                CDVPluginResult *pluginResult = nil;
 
-            NSMutableDictionary* message = [NSMutableDictionary dictionaryWithCapacity:2];
-            [message setObject:[appPath path] forKey:@"localPath"];
-            [message setObject:@"true" forKey:@"cached"];
-            pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:message];
+                NSMutableDictionary* message = [NSMutableDictionary dictionaryWithCapacity:2];
+                [message setObject:[appPath path] forKey:@"localPath"];
+                [message setObject:@"true" forKey:@"cached"];
+                pluginResult = [CDVPluginResult resultWithStatus:CDVCommandStatus_OK messageAsDictionary:message];
 
-            [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
-            return;
+                [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
+                return;
+            }
         }
     }
 
@@ -200,29 +223,34 @@
     NSString* src = [command argumentAtIndex:0 withDefault:nil];
     NSString* appId = [command argumentAtIndex:1];
     NSNumber* timeout = [command argumentAtIndex:6 withDefault:[NSNumber numberWithDouble:15]];
+    BOOL validateSrc = [[command argumentAtIndex:9 withDefault:@(YES)] boolValue];
 
     self.session = [self backgroundSession:timeout];
-
-    // checking if URL is valid
     NSURL *srcURL = [NSURL URLWithString:src];
-    NSMutableURLRequest *urlRequest = [NSMutableURLRequest requestWithURL:srcURL];
-    [urlRequest setHTTPMethod:@"HEAD"];
-
+    
     // Setting headers (do changes also in download url, or better extract setting the following lines to a function)
     NSDictionary *headers = [command argumentAtIndex:3 withDefault:nil andClass:[NSDictionary class]];
-    if(headers != nil) {
-        for (NSString* header in [headers allKeys]) {
-            NSLog(@"Setting header %@ %@", header, [headers objectForKey:header]);
-            [urlRequest addValue:[headers objectForKey:header] forHTTPHeaderField:header];
+    
+    // checking if URL is valid
+    BOOL srcIsValid = YES;
+    
+    if (validateSrc == YES) {
+        NSMutableURLRequest *urlRequest = [NSMutableURLRequest requestWithURL:srcURL];
+        [urlRequest setHTTPMethod:@"HEAD"];
+        
+        [self setHeaders:urlRequest :headers];
+
+        // request just to check if url is correct and server is available
+        NSHTTPURLResponse *response = nil;
+        NSError *error = nil;
+        [NSURLConnection sendSynchronousRequest:urlRequest returningResponse:&response error:&error];
+        
+        if (error || response.statusCode >= 400) {
+            srcIsValid = false;
         }
     }
 
-    // request just to check if url is correct and server is available
-    NSHTTPURLResponse *response = nil;
-    NSError *error = nil;
-    [NSURLConnection sendSynchronousRequest:urlRequest returningResponse:&response error:&error];
-
-    if(srcURL && srcURL.scheme && srcURL.host && error == nil && response.statusCode < 400) {
+    if(srcURL && srcURL.scheme && srcURL.host && srcIsValid == YES) {
 
         BOOL trustHost = (BOOL) [command argumentAtIndex:7 withDefault:@(NO)];
 
@@ -254,14 +282,8 @@
         } else {
             NSMutableURLRequest *request = [NSMutableURLRequest requestWithURL:downloadURL];
             request.timeoutInterval = 15.0;
-            // Setting headers (do changes also in check if url is valid, or better extract setting the following lines to a function)
-            NSDictionary *headers = [command argumentAtIndex:3 withDefault:nil andClass:[NSDictionary class]];
-            if(headers != nil) {
-                for (NSString* header in [headers allKeys]) {
-                    NSLog(@"Setting header %@ %@", header, [headers objectForKey:header]);
-                    [request addValue:[headers objectForKey:header] forHTTPHeaderField:header];
-                }
-            }
+            
+            [self setHeaders:request :headers];
 
             NSURLSessionDownloadTask *downloadTask = [self.session downloadTaskWithRequest:request];
 
@@ -292,6 +314,16 @@
     [pluginResult setKeepCallbackAsBool:YES];
     [self.commandDelegate sendPluginResult:pluginResult callbackId:command.callbackId];
 
+}
+
+- (void)setHeaders:(NSMutableURLRequest*)request :(NSDictionary*)headers {
+    // Setting headers (do changes also in check if url is valid, or better extract setting the following lines to a function)
+    if(headers != nil) {
+        for (NSString* header in [headers allKeys]) {
+            NSLog(@"Setting header %@ %@", header, [headers objectForKey:header]);
+            [request addValue:[headers objectForKey:header] forHTTPHeaderField:header];
+        }
+    }
 }
 
 - (void)cancel:(CDVInvokedUrlCommand *)command {
@@ -697,10 +729,10 @@
         }
         else
         {
-            #pragma clang diagnostic push
-            #pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
             configuration = [NSURLSessionConfiguration backgroundSessionConfiguration:sessionId];
-            #pragma clang diagnostic pop
+#pragma clang diagnostic pop
         }
 #else
 #if __MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_X_VERSION_10_0
